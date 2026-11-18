@@ -13,15 +13,26 @@ from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
 
-# Inizializzazione Firebase tramite variabile d'ambiente su Render
+# Inizializzazione automatica Firebase cercando qualsiasi variabile env con le credenziali
 if not firebase_admin._apps:
-    cred_json = os.environ.get("FIREBASE_CREDENTIALS")
-    if cred_json:
-        cred = credentials.Certificate(json.loads(cred_json))
+    cred_dict = None
+    for val in os.environ.values():
+        val_s = val.strip()
+        if val_s.startswith("{") and "private_key" in val_s and "project_id" in val_s:
+            try:
+                cred_dict = json.loads(val_s)
+                break
+            except Exception:
+                pass
+
+    if cred_dict:
+        cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
     elif os.path.exists("serviceAccountKey.json"):
         cred = credentials.Certificate("serviceAccountKey.json")
         firebase_admin.initialize_app(cred)
+    else:
+        raise RuntimeError("Nessuna variabile d'ambiente JSON Firebase trovata su Render!")
 
 db = firestore.client()
 
@@ -56,7 +67,6 @@ def build_filtered_url(base_url, language_code, is_sealed):
     if language_code and "language=" not in base_url:
         params.append(f"language={language_code}")
     if not is_sealed and "minCondition=" not in base_url:
-        # 2 = Near Mint su Cardmarket
         params.append("minCondition=2")
     if not params:
         return base_url
@@ -111,16 +121,13 @@ def check_single_item(doc_ref, data, user_webhook):
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Verifica se Cloudflare ha comunque bloccato la pagina
     page_title = soup.title.string.strip() if soup.title and soup.title.string else ""
     if "Just a moment" in page_title or "Attention Required" in page_title:
         return f"Challenge Cloudflare non superato su {target_url}"
 
-    # Estrazione titolo prodotto
     h1 = soup.find("h1")
     title = h1.get_text(" ", strip=True) if h1 else data.get("title") or "Prodotto Cardmarket"
 
-    # Estrazione immagine prodotto
     image_url = data.get("imageUrl", "")
     img_tag = soup.select_one("img.is-front, .product-image img, meta[property='og:image']")
     if img_tag:
@@ -131,7 +138,6 @@ def check_single_item(doc_ref, data, user_webhook):
             if src:
                 image_url = src if src.startswith("http") else f"https:{src}"
 
-    # Estrazione righe offerte
     offers = []
     rows = soup.select("div.table-body div.article-row")
     for row in rows:
@@ -151,7 +157,6 @@ def check_single_item(doc_ref, data, user_webhook):
         lang_el = row.select_one(".product-attributes span[data-original-title], .product-attributes span[aria-label]")
         lang_name = (lang_el.get("data-original-title") or lang_el.get("aria-label")) if lang_el else LANG_MAP.get(language_code, "")
 
-        # Filtro di sicurezza lato server
         if language_code and lang_name:
             expected_lang = LANG_MAP.get(language_code, "").lower()
             if expected_lang and expected_lang not in lang_name.lower():
@@ -186,13 +191,11 @@ def check_single_item(doc_ref, data, user_webhook):
         min_price = best["price"]
         update_payload["currentLowest"] = min_price
 
-        # Aggiornamento storico minimo giornaliero
         history = data.get("dailyHistory", {}) or {}
         if today_str not in history or min_price < float(history[today_str]):
             history[today_str] = min_price
             update_payload["dailyHistory"] = history
 
-        # Controllo notifica Discord (una sola volta per offerta, oppure se il prezzo scende ancora)
         notified_offers = data.get("notifiedOffers", {}) or {}
         offer_key = f"{best['seller']}_{best.get('condition', '')}_{best.get('language', '')}"
         last_notified_price = notified_offers.get(offer_key)
@@ -220,7 +223,6 @@ def run_all_checks():
     return results
 
 def background_worker():
-    # Attende 15 secondi all'avvio prima del primo ciclo
     time.sleep(15)
     while True:
         try:
@@ -229,10 +231,8 @@ def background_worker():
             print(f"[{datetime.now()}] Esito ciclo: {res}")
         except Exception as e:
             print(f"Errore nel worker in background: {e}")
-        # 900 secondi = 15 minuti (mantiene l'uso sotto i 10 min/giorno gratuiti di Cloudflare)
         time.sleep(900)
 
-# Avvio del thread in background una sola volta
 if not os.environ.get("WERKZEUG_RUN_MAIN") == "true":
     t = threading.Thread(target=background_worker, daemon=True)
     t.start()
