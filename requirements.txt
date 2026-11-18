@@ -1,0 +1,4 @@
+firebase-admin
+curl-cffi
+beautifulsoup4
+requests
