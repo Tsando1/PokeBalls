@@ -211,15 +211,25 @@ def check_single_item(doc_ref, data, user_webhook):
 
 def run_all_checks():
     results = []
-    users = db.collection("users").stream()
-    for user_doc in users:
-        user_data = user_doc.to_dict() or {}
-        webhook = user_data.get("discordWebhook", "")
-        items = user_doc.reference.collection("tracked_items").stream()
-        for item_doc in items:
-            res = check_single_item(item_doc.reference, item_doc.to_dict() or {}, webhook)
-            results.append(res)
-            time.sleep(2)
+    # 1. Cerca nelle collezioni radice (es. products, items, cards, tracked_items)
+    for col in db.collections():
+        if col.id == "users":
+            for user_doc in col.stream():
+                user_data = user_doc.to_dict() or {}
+                webhook = user_data.get("discordWebhook", "")
+                for subcol in user_doc.reference.collections():
+                    for item_doc in subcol.stream():
+                        res = check_single_item(item_doc.reference, item_doc.to_dict() or {}, webhook)
+                        results.append(res)
+                        time.sleep(2)
+        else:
+            for item_doc in col.stream():
+                item_data = item_doc.to_dict() or {}
+                if "url" in item_data:
+                    webhook = item_data.get("discordWebhook", "")
+                    res = check_single_item(item_doc.reference, item_data, webhook)
+                    results.append(res)
+                    time.sleep(2)
     return results
 
 def background_worker():
