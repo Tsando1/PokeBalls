@@ -99,12 +99,13 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
         url = build_filtered_url(base_url, data["langId"], is_sealed)
 
         try:
-            resp = cf_requests.get(
-                url,
-                impersonate="chrome",
-                headers={"Accept-Language": "en-US,en;q=0.9,it;q=0.8"},
-                timeout=20
-            )
+            proxy_url = "https://pokeballs.alexandrodellis1102.workers.dev"
+resp = cf_requests.get(
+    proxy_url,
+    params={"url": url},
+    impersonate="chrome",
+    timeout=25
+)
             if resp.status_code != 200:
                 msg = f"HTTP {resp.status_code} su {url}"
                 log(msg)
