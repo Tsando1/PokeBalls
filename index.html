@@ -184,19 +184,25 @@
 
                     card.querySelector("[data-del]").onclick = () => deleteDoc(doc(db, "items", id));
 
-                    const hist = item.history || [];
-                    if (charts[id]) charts[id].destroy();
-                    charts[id] = new Chart(document.getElementById(`chart-${id}`), {
-                        type: "line",
-                        data: {
-                            labels: hist.map(h => h.t),
-                            datasets: [
-                                { label: "Media Top 10 (€)", data: hist.map(h => h.avg), borderColor: "#818cf8", tension: 0.25 },
-                                { label: "1ª Offerta (€)", data: hist.map(h => h.min), borderColor: "#34d399", tension: 0.25 }
-                            ]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    });
+                    const hist = item.dailyHistory || [];
+if (charts[id]) charts[id].destroy();
+charts[id] = new Chart(document.getElementById(`chart-${id}`), {
+  type: "line",
+  data: {
+    labels: hist.map(h => h.d),
+    datasets: [
+      {
+        label: "Minimo Giornaliero (€)",
+        data: hist.map(h => h.min),
+        borderColor: "#fbbf24",
+        backgroundColor: "rgba(251, 191, 36, 0.15)",
+        fill: true,
+        tension: 0.25
+      }
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false }
+});
                 });
             });
         });
