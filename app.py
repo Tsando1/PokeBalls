@@ -24,9 +24,21 @@ TZ_ITALY = ZoneInfo("Europe/Rome")
 lock = threading.Lock()
 web_app = Flask(__name__)
 
+def log(msg: str):
+    print(msg, flush=True)
+
 @web_app.route("/")
 def health():
     return "Cardmarket Tracker Active", 200
+
+@web_app.route("/test")
+def force_run():
+    docs = list(db.collection("items").stream())
+    results = []
+    for doc in docs:
+        res = check_single_item(doc.id, doc.to_dict(), force_refresh_top10=True)
+        results.append(res)
+    return {"trovati_nel_db": len(docs), "esito": results}, 200
 
 def build_filtered_url(base_url: str, lang_id: str, is_sealed: bool) -> str:
     parsed = urlparse(base_url.strip())
@@ -78,9 +90,9 @@ def send_discord(webhook_url: str, name: str, min_price: float, seller: str, tar
     try:
         requests.post(webhook_url, json={"embeds": [embed]}, timeout=10)
     except Exception as e:
-        print(f"Errore invio Discord: {e}")
+        log(f"Errore invio Discord: {e}")
 
-def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False):
+def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False) -> str:
     with lock:
         base_url = data["baseUrl"]
         is_sealed = "/Singles/" not in base_url
@@ -94,11 +106,13 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
                 timeout=20
             )
             if resp.status_code != 200:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] HTTP {resp.status_code} su {url}")
-                return
+                msg = f"HTTP {resp.status_code} su {url}"
+                log(msg)
+                return msg
         except Exception as e:
-            print(f"Errore connessione: {e}")
-            return
+            msg = f"Errore connessione: {e}"
+            log(msg)
+            return msg
 
         soup = BeautifulSoup(resp.text, "html.parser")
         updates = {"isSealed": is_sealed}
@@ -146,7 +160,9 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
 
         if not top10:
             db.collection("items").document(doc_id).update(updates)
-            return
+            msg = f"Nessuna offerta valida trovata per {card_name} (righe HTML trovate: {len(rows)})"
+            log(msg)
+            return msg
 
         now_it = datetime.now(TZ_ITALY)
         today_str = now_it.strftime("%Y-%m-%d")
@@ -160,7 +176,6 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
         updates["currentMinPrice"] = min_price
         updates["lastUpdated"] = f"{today_label} {now_time_str}"
 
-        # Aggiorna Top 10 al primo caricamento, ogni ora e resetta dopo 24h
         saved_day = data.get("dailyMinDate")
         saved_hour = data.get("lastTop10Hour")
 
@@ -169,7 +184,6 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
             updates["currentAvgTop10"] = avg_top10
             updates["lastTop10Hour"] = current_hour_str
 
-        # Minimo giornaliero + grafico dei minimi giornalieri
         saved_daily_min = data.get("dailyMinPrice")
         daily_history = list(data.get("dailyHistory", []))
 
@@ -188,7 +202,6 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
                 daily_history.append({"d": today_label, "min": new_daily_min})
             updates["dailyHistory"] = daily_history
 
-        # Notifica Discord una sola volta per questa specifica offerta
         target = float(data["targetPrice"])
         if min_price <= target:
             last_sig = data.get("lastAlertSignature")
@@ -204,25 +217,30 @@ def check_single_item(doc_id: str, data: dict, force_refresh_top10: bool = False
             updates["lastAlertPrice"] = None
 
         db.collection("items").document(doc_id).update(updates)
-        print(f"[{now_time_str}] {card_name} -> 1ª Offerta: {min_price:.2f}€ | Min Oggi: {updates.get('dailyMinPrice', saved_daily_min):.2f}€")
+        msg = f"OK {card_name} -> 1ª Offerta: {min_price:.2f}€ | Min Oggi: {updates.get('dailyMinPrice', saved_daily_min):.2f}€"
+        log(msg)
+        return msg
 
 def on_snapshot(col_snapshot, changes, read_time):
     for change in changes:
         if change.type.name == "ADDED":
             data = change.document.to_dict()
             if not data.get("top10Offers"):
+                log("Nuova carta rilevata dal sito! Avvio controllo immediato...")
                 threading.Thread(target=check_single_item, args=(change.document.id, data, True)).start()
 
 def background_worker():
+    log("Worker avviato, connessione a Firebase...")
     db.collection("items").on_snapshot(on_snapshot)
     while True:
         try:
-            docs = db.collection("items").stream()
+            docs = list(db.collection("items").stream())
+            log(f"Controllo periodico su {len(docs)} prodotti...")
             for doc in docs:
                 check_single_item(doc.id, doc.to_dict(), force_refresh_top10=False)
                 time.sleep(random.uniform(3.0, 6.0))
         except Exception as e:
-            print(f"Errore ciclo: {e}")
+            log(f"Errore ciclo: {e}")
         time.sleep(60)
 
 threading.Thread(target=background_worker, daemon=True).start()
