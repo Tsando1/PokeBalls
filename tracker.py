@@ -152,7 +152,7 @@ def fetch_html_stealth(target_url, sb=None):
         except Exception:
             pass
 
-    # 1. curl_cffi
+    # 1. curl_cffi impersonate chrome120
     try:
         from curl_cffi import requests as cf_requests
         resp = cf_requests.get(
@@ -165,40 +165,64 @@ def fetch_html_stealth(target_url, sb=None):
             },
             timeout=15
         )
-        if resp.status_code == 200 and "Please login to continue" not in resp.text and "Just a moment" not in resp.text:
+        if resp.status_code == 200 and "article-row" in resp.text and "Please login to continue" not in resp.text and "Just a moment" not in resp.text:
             return resp.text, "curl_cffi"
     except Exception:
         pass
 
-    # 2. SeleniumBase CDP Mode (Bypass Turnstile)
+    # 2. SeleniumBase UC Mode (Bypass Cloudflare Turnstile)
     if sb:
         try:
-            print("  [CDP Mode] Navigazione stealth...")
-            sb.activate_cdp_mode(target_url)
-            sb.sleep(4)
+            print("  [UC Mode] Apertura stealth con reconnect...")
+            sb.uc_open_with_reconnect(target_url, reconnect_time=5)
+            sb.sleep(3)
+
+            html = sb.get_page_source()
+            if "article-row" in html or ("h1" in html and "table" in html):
+                return html, "UC Reconnect"
+
+            # Se Cloudflare mostra la schermata Turnstile / Just a moment
+            if "Just a moment" in html or "Attention Required" in html or "Turnstile" in html:
+                print("  [UC Mode] Rilevata schermata Turnstile, esecuzione solve_captcha()...")
+                try:
+                    sb.solve_captcha()
+                    sb.sleep(3)
+                except Exception as ce:
+                    print(f"    solve_captcha fallback: {ce}")
+
+                html = sb.get_page_source()
+                if "article-row" in html or "h1" in html:
+                    return html, "UC solve_captcha"
+
+                print("  [UC Mode] Captcha ancora presente, tentativo con uc_gui_click_captcha()...")
+                try:
+                    sb.uc_gui_click_captcha()
+                    sb.sleep(4)
+                except Exception as ge:
+                    print(f"    uc_gui_click_captcha fallback: {ge}")
+
+                html = sb.get_page_source()
+                if "article-row" in html or "h1" in html:
+                    return html, "UC gui_click"
+
+            # Fallback CDP mode se ancora bloccato
             try:
+                print("  [UC Mode] Tentativo fallback con activate_cdp_mode...")
+                sb.activate_cdp_mode(target_url)
+                sb.sleep(3)
                 sb.solve_captcha()
                 sb.sleep(3)
+                html = sb.get_page_source()
+                if "article-row" in html or "h1" in html:
+                    return html, "CDP Mode"
             except Exception:
                 pass
 
-            html = sb.get_page_source()
-            if "article-row" in html or "h1" in html:
-                return html, "CDP Mode"
-
-            # Secondo tentativo solve_captcha se ancora bloccato
-            if "Just a moment" in html or "Attention Required" in html:
-                print("  [CDP Mode] Secondo tentativo risoluzione Turnstile...")
-                try:
-                    sb.solve_captcha()
-                    sb.sleep(4)
-                    html = sb.get_page_source()
-                    if "article-row" in html or "h1" in html:
-                        return html, "CDP Mode"
-                except Exception:
-                    pass
+            print(f"  [UC Mode Fine] Titolo pagina: '{sb.get_title()}' - Lunghezza HTML: {len(html)}")
+            if "article-row" in html:
+                return html, "UC Page"
         except Exception as e:
-            print(f"  [CDP Mode Errore]: {e}")
+            print(f"  [UC Mode Errore]: {e}")
 
     return None, "Blocco Cloudflare"
 
@@ -427,11 +451,11 @@ def main():
     if not items_to_check:
         print("Nessun prodotto da monitorare nel database.")
     else:
-        # Esecuzione con SeleniumBase CDP Mode
+        # Esecuzione con SeleniumBase UC Mode (Bypass Turnstile)
         try:
             from seleniumbase import SB
-            print("Avvio sessione SeleniumBase CDP Mode (Bypass Turnstile)...")
-            with SB(uc=True, test=True, guest=True) as sb:
+            print("Avvio sessione SeleniumBase UC Mode (Bypass Turnstile)...")
+            with SB(uc=True, test=True) as sb:
                 for idx, (ref, data) in enumerate(items_to_check, 1):
                     print(f"\n[{idx}/{len(items_to_check)}]")
                     res = check_item(ref, data, sb)
@@ -443,6 +467,19 @@ def main():
             for idx, (ref, data) in enumerate(items_to_check, 1):
                 res = check_item(ref, data, None)
                 summary_rows.append(res)
+
+    # Scrittura file diagnostico report_last_run.json
+    try:
+        report_data = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "total_items": len(items_to_check),
+            "results": summary_rows
+        }
+        with open("report_last_run.json", "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2)
+        print("File report_last_run.json salvato.")
+    except Exception as e:
+        print(f"Errore salvataggio report_last_run.json: {e}")
 
     # Scrittura report riassuntivo in GITHUB_STEP_SUMMARY
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
