@@ -2,8 +2,8 @@ name: Cardmarket Cloud Tracker
 
 on:
   schedule:
-    # Esegue il controllo automatico ogni 30 minuti 24/7
-    - cron: '*/30 * * * *'
+    # Esegue il controllo automatico ogni 15 minuti 24/7 (massima frequenza supportata)
+    - cron: '*/15 * * * *'
   workflow_dispatch: # Permette di avviare il controllo manualmente con un click da GitHub!
 
 jobs:

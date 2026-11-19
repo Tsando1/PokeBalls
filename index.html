@@ -183,35 +183,85 @@
               </div>
 
               <div class="flex flex-wrap gap-1.5 mb-4">${top10Html}</div>
-              <div class="h-40"><canvas id="chart-${id}"></canvas></div>
+
+              <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-semibold text-slate-400">Andamento Prezzo</span>
+                <div class="flex gap-1 text-xs">
+                  <button id="btn-mode-hourly-${id}" class="px-2 py-0.5 rounded bg-sky-700 text-sky-100 font-semibold transition">Orario (Ultime 24h)</button>
+                  <button id="btn-mode-daily-${id}" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition">Storico Giornaliero</button>
+                </div>
+              </div>
+
+              <div class="h-44"><canvas id="chart-${id}"></canvas></div>
             </div>
           `;
                     container.appendChild(card);
 
                     card.querySelector("[data-del]").onclick = () => deleteDoc(doc(db, "items", id));
 
-                    let hist = item.dailyHistory || [];
-                    if (!Array.isArray(hist)) {
-                        hist = Object.entries(hist).map(([d, min]) => ({ d, min: Number(min) || 0 }));
+                    const hourlyData = item.hourlyHistory || [];
+                    let dailyData = item.dailyHistory || [];
+                    if (!Array.isArray(dailyData)) {
+                        dailyData = Object.entries(dailyData).map(([d, min]) => ({ d, min: Number(min) || 0 }));
                     }
-                    if (charts[id]) charts[id].destroy();
-                    charts[id] = new Chart(document.getElementById(`chart-${id}`), {
-                        type: "line",
-                        data: {
-                            labels: hist.map(h => h.d),
-                            datasets: [
-                                {
-                                    label: "Minimo Giornaliero (€)",
-                                    data: hist.map(h => h.min),
-                                    borderColor: "#fbbf24",
-                                    backgroundColor: "rgba(251, 191, 36, 0.15)",
+
+                    const renderChart = (mode) => {
+                        if (charts[id]) charts[id].destroy();
+
+                        const isHourly = mode === "hourly";
+                        const source = isHourly ? hourlyData : dailyData;
+                        const labels = isHourly ? source.map(h => h.t) : source.map(h => h.d);
+                        const points = isHourly ? source.map(h => h.p) : source.map(h => h.min);
+                        const labelTitle = isHourly ? "Prezzo Rilevato (€)" : "Minimo Giornaliero (€)";
+                        const color = isHourly ? "#38bdf8" : "#fbbf24";
+                        const bgColor = isHourly ? "rgba(56, 189, 248, 0.15)" : "rgba(251, 191, 36, 0.15)";
+
+                        const ctx = document.getElementById(`chart-${id}`);
+                        if (!ctx) return;
+
+                        charts[id] = new Chart(ctx, {
+                            type: "line",
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: labelTitle,
+                                    data: points,
+                                    borderColor: color,
+                                    backgroundColor: bgColor,
                                     fill: true,
                                     tension: 0.25
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+                                    y: { ticks: { callback: v => v + ' €', font: { size: 10 } } }
                                 }
-                            ]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false }
-                    });
+                            }
+                        });
+
+                        const bH = document.getElementById(`btn-mode-hourly-${id}`);
+                        const bD = document.getElementById(`btn-mode-daily-${id}`);
+                        if (bH && bD) {
+                            if (isHourly) {
+                                bH.className = "px-2 py-0.5 rounded bg-sky-700 text-sky-100 font-semibold transition";
+                                bD.className = "px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition";
+                            } else {
+                                bD.className = "px-2 py-0.5 rounded bg-amber-700 text-amber-100 font-semibold transition";
+                                bH.className = "px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition";
+                            }
+                        }
+                    };
+
+                    const defaultMode = hourlyData.length > 0 ? "hourly" : "daily";
+                    renderChart(defaultMode);
+
+                    const bH = document.getElementById(`btn-mode-hourly-${id}`);
+                    const bD = document.getElementById(`btn-mode-daily-${id}`);
+                    if (bH) bH.onclick = () => renderChart("hourly");
+                    if (bD) bD.onclick = () => renderChart("daily");
                 });
             });
         });

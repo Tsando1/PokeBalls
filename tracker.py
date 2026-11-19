@@ -321,6 +321,14 @@ def check_item(doc_ref, data, driver=None):
         ]
         update_payload["dailyHistory"] = sorted_history
 
+        # Storico Orario ad alta frequenza (per grafici orari dettagliati)
+        raw_hourly = data.get("hourlyHistory") or []
+        if not isinstance(raw_hourly, list):
+            raw_hourly = []
+        time_label = now_utc.strftime("%d/%m %H:%M")
+        raw_hourly.append({"t": time_label, "p": min_price})
+        update_payload["hourlyHistory"] = raw_hourly[-96:]  # Mantiene le ultime 96 rilevazioni (24-48h a intervalli di 15-30m)
+
         # Notifiche Discord con logica anti-spam
         webhook = data.get("discordWebhook")
         notified_offers = dict(data.get("notifiedOffers") or {})
