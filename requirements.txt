@@ -1,0 +1,5 @@
+firebase-admin
+requests
+beautifulsoup4
+curl-cffi
+seleniumbase

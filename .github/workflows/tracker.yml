@@ -1,0 +1,38 @@
+name: Cardmarket Cloud Tracker
+
+on:
+  schedule:
+    # Esegue il controllo automatico ogni 30 minuti 24/7
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Permette di avviare il controllo manualmente con un click da GitHub!
+
+jobs:
+  track-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Scarica il codice del repository
+        uses: actions/checkout@v4
+
+      - name: Configura Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installa Chrome e Xvfb per Undetected Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb google-chrome-stable
+
+      - name: Installa le dipendenze Python
+        run: |
+          pip install -r requirements.txt
+          seleniumbase install chromedriver
+
+      - name: Esegui il Tracker Cardmarket
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          xvfb-run --auto-servernum python tracker.py
