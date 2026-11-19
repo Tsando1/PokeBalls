@@ -37,5 +37,6 @@ jobs:
       - name: Esegui il Tracker Cardmarket
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SCRAPEDO_TOKEN: ${{ secrets.SCRAPEDO_TOKEN }}
         run: |
           xvfb-run --auto-servernum python tracker.py
