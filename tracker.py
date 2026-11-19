@@ -154,19 +154,25 @@ def fetch_html_stealth(target_url, driver=None):
             timeout=20
         )
         if resp.status_code == 200 and "Please login to continue" not in resp.text and "Just a moment" not in resp.text:
+            print("  [Engine 1] Pagina scaricata con successo via curl_cffi.")
             return resp.text
+        else:
+            print(f"  [Engine 1] curl_cffi stato {resp.status_code}, passaggio a SeleniumBase...")
     except Exception as e:
-        print(f"  [Engine 1] curl_cffi: {e}")
+        print(f"  [Engine 1] curl_cffi eccezione: {e}")
 
     # Motore 2: SeleniumBase UC Mode (Undetected Chrome)
     if driver:
         try:
             print("  [Engine 2] Caricamento con SeleniumBase UC Mode...")
             driver.get(target_url)
-            driver.sleep(5)  # Attesa per eventuale challenge JS di Cloudflare
+            driver.sleep(6)  # Attesa per eventuale challenge JS di Cloudflare
             html = driver.get_page_source()
             if "article-row" in html or "h1" in html:
+                print("  [Engine 2] Pagina scaricata con successo via SeleniumBase.")
                 return html
+            else:
+                print("  [Engine 2] Elementi tabella o h1 non trovati nell'HTML.")
         except Exception as e:
             print(f"  [Engine 2] Errore SeleniumBase: {e}")
 
@@ -174,10 +180,12 @@ def fetch_html_stealth(target_url, driver=None):
 
 def check_item(doc_ref, data, driver=None):
     raw_url = (data.get("baseUrl") or data.get("url") or "").strip()
-    if not raw_url:
-        return "URL mancante"
-
     title_db = data.get("name") or data.get("title") or "Prodotto Cardmarket"
+    
+    if not raw_url:
+        print(f"  [SKIP] URL mancante per il documento {doc_ref.id}")
+        return {"title": title_db, "min": "-", "avg": "-", "status": "URL mancante"}
+
     target_price = float(data.get("targetPrice") or 0)
     language_val = data.get("langId") or data.get("language") or ""
     
@@ -192,8 +200,14 @@ def check_item(doc_ref, data, driver=None):
     print(f"    URL: {target_url}")
 
     html = fetch_html_stealth(target_url, driver)
+    now_utc = datetime.now(timezone.utc)
+    formatted_now = now_utc.strftime("%d/%m %H:%M UTC")
+
     if not html:
-        return f"ERR {title_db}: Impossibile scaricare la pagina (blocco anti-bot o timeout)"
+        doc_ref.update({"lastUpdated": f"Errore anti-bot ({formatted_now})"})
+        err_msg = f"Impossibile scaricare (blocco Cloudflare)"
+        print(f"    [ERR] {err_msg}")
+        return {"title": title_db, "min": "-", "avg": "-", "status": err_msg}
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -261,10 +275,8 @@ def check_item(doc_ref, data, driver=None):
     top_10 = offers[:10]
     top10_prices = [round(o["price"], 2) for o in top_10]
 
-    now_utc = datetime.now(timezone.utc)
     now_iso = now_utc.isoformat()
     today_str = now_utc.strftime("%Y-%m-%d")
-    formatted_now = now_utc.strftime("%d/%m/%Y %H:%M UTC")
 
     update_payload = {
         "name": title,
@@ -350,14 +362,13 @@ def check_item(doc_ref, data, driver=None):
             update_payload["notifiedOffers"] = notified_offers
 
         doc_ref.update(update_payload)
-        summary = f"OK {title}: {len(top_10)} offerte (Minimo: {min_price:.2f} €, Media Top 10: {current_avg:.2f} €)"
-        print(f"    {summary}")
-        return summary
+        summary = f"OK ({len(top_10)} offerte)"
+        print(f"    OK {title}: Minimo {min_price:.2f} €, Media Top 10: {current_avg:.2f} €")
+        return {"title": title, "min": f"{min_price:.2f} €", "avg": f"{current_avg:.2f} €", "status": summary}
     else:
         doc_ref.update(update_payload)
-        summary = f"OK {title}: 0 offerte compatibili al momento"
-        print(f"    {summary}")
-        return summary
+        print(f"    OK {title}: 0 offerte compatibili trovate.")
+        return {"title": title, "min": "N/D", "avg": "N/D", "status": "0 offerte trovate"}
 
 def main():
     print("=" * 60)
@@ -367,6 +378,17 @@ def main():
     items_to_check = []
     processed_paths = set()
 
+    # 1. Scansione esplicita collezione radice 'items'
+    try:
+        for item_doc in db.collection("items").stream():
+            path = item_doc.reference.path
+            if path not in processed_paths:
+                processed_paths.add(path)
+                items_to_check.append((item_doc.reference, item_doc.to_dict() or {}))
+    except Exception as e:
+        print(f"Avviso scansione db.collection('items'): {e}")
+
+    # 2. Scansione collection_group('items')
     try:
         for item_doc in db.collection_group("items").stream():
             path = item_doc.reference.path
@@ -376,6 +398,7 @@ def main():
     except Exception as e:
         print(f"Avviso scansione collection_group: {e}")
 
+    # 3. Scansione collezioni radice generiche
     try:
         for col in db.collections():
             if col.id != "users":
@@ -385,33 +408,60 @@ def main():
                         processed_paths.add(path)
                         items_to_check.append((item_doc.reference, item_doc.to_dict() or {}))
     except Exception as e:
-        print(f"Avviso scansione collezioni radice: {e}")
+        print(f"Avviso scansione collezioni generiche: {e}")
 
     print(f"Elementi totali trovati nel database: {len(items_to_check)}")
+    
+    summary_rows = []
+
     if not items_to_check:
-        print("Nessun prodotto da monitorare. Esco.")
-        return
+        print("Nessun prodotto da monitorare nel database.")
+    else:
+        # Inizializzazione browser Undetected Chrome (SeleniumBase)
+        driver = None
+        try:
+            from seleniumbase import Driver
+            print("Inizializzazione browser Undetected Chrome (SeleniumBase)...")
+            driver = Driver(uc=True, headless=False, no_sandbox=True)
+            print("Undetected Chrome avviato correttamente!")
+        except Exception as e:
+            print(f"Nota: Undetected Chrome non inizializzato ({e}), utilizzo motore curl_cffi.")
 
-    # Inizializzazione browser Undetected Chrome (SeleniumBase)
-    driver = None
-    try:
-        from seleniumbase import Driver
-        print("Inizializzazione browser Undetected Chrome (SeleniumBase)...")
-        driver = Driver(uc=True, headless=False)
-    except Exception as e:
-        print(f"Nota: SeleniumBase non inizializzato ({e}), utilizzo motore curl_cffi.")
+        try:
+            for idx, (ref, data) in enumerate(items_to_check, 1):
+                print(f"\n[{idx}/{len(items_to_check)}]")
+                res = check_item(ref, data, driver)
+                summary_rows.append(res)
+                time.sleep(3)
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
 
-    try:
-        for idx, (ref, data) in enumerate(items_to_check, 1):
-            print(f"\n[{idx}/{len(items_to_check)}]")
-            check_item(ref, data, driver)
-            time.sleep(3)
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+    # Scrittura report riassuntivo in GITHUB_STEP_SUMMARY
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_file:
+        try:
+            lines = [
+                "## ⚡ Report Esecuzione Cardmarket Tracker",
+                f"**Data e Ora:** `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`",
+                f"**Prodotti Monitorati:** `{len(items_to_check)}`",
+                "",
+                "| Prodotto | Minimo Attuale | Media Top 10 | Esito |",
+                "|---|---|---|---|"
+            ]
+            for r in summary_rows:
+                lines.append(f"| **{r['title']}** | {r['min']} | {r['avg']} | {r['status']} |")
+            if not summary_rows:
+                lines.append("| *Nessun elemento* | - | - | Database vuoto |")
+
+            with open(summary_file, "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            print("Report scritto con successo in GITHUB_STEP_SUMMARY.")
+        except Exception as e:
+            print(f"Errore scrittura GITHUB_STEP_SUMMARY: {e}")
 
     print("\n" + "=" * 60)
     print("CICLO DI CONTROLLO COMPLETATO CON SUCCESSO!")
