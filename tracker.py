@@ -2,7 +2,6 @@ import os
 import re
 import json
 import time
-import traceback
 from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 import requests
@@ -124,7 +123,7 @@ def send_discord_alert(webhook_url, item_title, item_url, image_url, offer, targ
             {"name": "Venditore", "value": offer.get("seller", "N/D"), "inline": True},
             {"name": "Dettagli", "value": f"{offer.get('condition', '')} | {offer.get('language', '')}".strip(" |"), "inline": False}
         ],
-        "footer": {"text": "Cardmarket Cloud Tracker • GitHub Actions"},
+        "footer": {"text": "Cardmarket Cloud Tracker • Ogni 5 Minuti"},
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     if image_url:
@@ -135,30 +134,25 @@ def send_discord_alert(webhook_url, item_title, item_url, image_url, offer, targ
     except Exception as e:
         print(f"  [DISCORD ERROR] Errore invio Discord: {e}")
 
-def fetch_html_stealth(target_url, driver=None):
+def fetch_html_stealth(target_url, sb=None):
     """
     Motori di scaricamento in cascata:
-    1. Scrape.do (se configurato il secret SCRAPEDO_TOKEN, bypass 100% garantito)
-    2. curl_cffi con impersonazione Chrome 120
-    3. SeleniumBase UC-Mode con uc_open_with_reconnect e click captcha
+    1. Scrape.do (se configurato)
+    2. curl_cffi impersonate chrome120
+    3. SeleniumBase CDP Mode (Chrome DevTools Protocol con bypass Turnstile)
     """
-    errors = []
-
-    # Motore 0: Scrape.do Proxy API (se presente il token gratuito)
+    # 0. Scrape.do se disponibile
     scraped_token = os.environ.get("SCRAPEDO_TOKEN", "").strip()
     if scraped_token:
         try:
-            print("  [Engine 0] Tentativo via Scrape.do API...")
             api_url = f"https://api.scrape.do/?token={scraped_token}&url={target_url}"
             resp = requests.get(api_url, timeout=25)
             if resp.status_code == 200 and ("article-row" in resp.text or "h1" in resp.text):
-                print("  [Engine 0] Successo via Scrape.do!")
                 return resp.text, "Scrape.do"
-            errors.append(f"Scrape.do status {resp.status_code}")
-        except Exception as e:
-            errors.append(f"Scrape.do err: {e}")
+        except Exception:
+            pass
 
-    # Motore 1: curl_cffi
+    # 1. curl_cffi
     try:
         from curl_cffi import requests as cf_requests
         resp = cf_requests.get(
@@ -169,59 +163,50 @@ def fetch_html_stealth(target_url, driver=None):
                 "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
             },
-            timeout=20
+            timeout=15
         )
         if resp.status_code == 200 and "Please login to continue" not in resp.text and "Just a moment" not in resp.text:
-            print("  [Engine 1] Pagina scaricata con successo via curl_cffi.")
             return resp.text, "curl_cffi"
-        else:
-            errors.append(f"curl_cffi status {resp.status_code} (blocco bot)")
-    except Exception as e:
-        errors.append(f"curl_cffi: {e}")
+    except Exception:
+        pass
 
-    # Motore 2: SeleniumBase UC Mode (Undetected Chrome con bypass Turnstile)
-    if driver:
+    # 2. SeleniumBase CDP Mode (Bypass Turnstile)
+    if sb:
         try:
-            print("  [Engine 2] Caricamento con SeleniumBase uc_open_with_reconnect...")
-            driver.uc_open_with_reconnect(target_url, reconnect_time=6)
-            
-            # Clicca eventuale Turnstile checkbox
+            print("  [CDP Mode] Navigazione stealth...")
+            sb.activate_cdp_mode(target_url)
+            sb.sleep(4)
             try:
-                driver.uc_gui_click_captcha()
+                sb.solve_captcha()
+                sb.sleep(3)
             except Exception:
                 pass
 
-            driver.sleep(4)
-            html = driver.get_page_source()
+            html = sb.get_page_source()
+            if "article-row" in html or "h1" in html:
+                return html, "CDP Mode"
 
-            # Se ancora bloccato, secondo tentativo
+            # Secondo tentativo solve_captcha se ancora bloccato
             if "Just a moment" in html or "Attention Required" in html:
-                print("  [Engine 2] Turnstile presente, secondo tentativo click...")
+                print("  [CDP Mode] Secondo tentativo risoluzione Turnstile...")
                 try:
-                    driver.uc_gui_click_captcha()
-                    driver.sleep(5)
-                    html = driver.get_page_source()
+                    sb.solve_captcha()
+                    sb.sleep(4)
+                    html = sb.get_page_source()
+                    if "article-row" in html or "h1" in html:
+                        return html, "CDP Mode"
                 except Exception:
                     pass
-
-            if "article-row" in html or "h1" in html:
-                print("  [Engine 2] Pagina scaricata con successo via SeleniumBase!")
-                return html, "SeleniumBase UC"
-            else:
-                errors.append("SeleniumBase: elementi tabella o h1 non presenti dopo Turnstile")
         except Exception as e:
-            errors.append(f"SeleniumBase err: {e}")
-    else:
-        errors.append("SeleniumBase driver non inizializzato")
+            print(f"  [CDP Mode Errore]: {e}")
 
-    return None, "; ".join(errors)
+    return None, "Blocco Cloudflare"
 
-def check_item(doc_ref, data, driver=None):
+def check_item(doc_ref, data, sb=None):
     raw_url = (data.get("baseUrl") or data.get("url") or "").strip()
     title_db = data.get("name") or data.get("title") or "Prodotto Cardmarket"
     
     if not raw_url:
-        print(f"  [SKIP] URL mancante per il documento {doc_ref.id}")
         return {"title": title_db, "min": "-", "avg": "-", "status": "URL mancante"}
 
     target_price = float(data.get("targetPrice") or 0)
@@ -237,13 +222,13 @@ def check_item(doc_ref, data, driver=None):
     print(f"\n--> Controllo: {title_db}")
     print(f"    URL: {target_url}")
 
-    html, engine_used = fetch_html_stealth(target_url, driver)
+    html, engine_used = fetch_html_stealth(target_url, sb)
     now_utc = datetime.now(timezone.utc)
     formatted_now = now_utc.strftime("%d/%m %H:%M UTC")
 
     if not html:
-        doc_ref.update({"lastUpdated": f"Errore scaricamento ({formatted_now})"})
-        err_msg = f"Blocco Cloudflare ({engine_used})"
+        doc_ref.update({"lastUpdated": f"Errore anti-bot ({formatted_now})"})
+        err_msg = f"Blocco Cloudflare"
         print(f"    [ERR] {err_msg}")
         return {"title": title_db, "min": "-", "avg": "-", "status": err_msg}
 
@@ -377,7 +362,7 @@ def check_item(doc_ref, data, driver=None):
             raw_hourly = []
         time_label = now_utc.strftime("%d/%m %H:%M")
         raw_hourly.append({"t": time_label, "p": min_price})
-        update_payload["hourlyHistory"] = raw_hourly[-96:]  # Mantiene le ultime 96 rilevazioni (24-48h a intervalli di 15-30m)
+        update_payload["hourlyHistory"] = raw_hourly[-96:]
 
         # Notifiche Discord con logica anti-spam
         webhook = data.get("discordWebhook")
@@ -400,7 +385,7 @@ def check_item(doc_ref, data, driver=None):
             update_payload["notifiedOffers"] = notified_offers
 
         doc_ref.update(update_payload)
-        summary = f"OK ({len(top_10)} offerte - via {engine_used})"
+        summary = f"OK ({len(top_10)} offerte)"
         print(f"    OK {title}: Minimo {min_price:.2f} €, Media Top 10: {current_avg:.2f} €")
         return {"title": title, "min": f"{min_price:.2f} €", "avg": f"{current_avg:.2f} €", "status": summary}
     else:
@@ -416,7 +401,7 @@ def main():
     items_to_check = []
     processed_paths = set()
 
-    # 1. Scansione esplicita collezione radice 'items'
+    # Scansione collezione 'items'
     try:
         for item_doc in db.collection("items").stream():
             path = item_doc.reference.path
@@ -426,7 +411,6 @@ def main():
     except Exception as e:
         print(f"Avviso scansione db.collection('items'): {e}")
 
-    # 2. Scansione collection_group('items')
     try:
         for item_doc in db.collection_group("items").stream():
             path = item_doc.reference.path
@@ -436,60 +420,38 @@ def main():
     except Exception as e:
         print(f"Avviso scansione collection_group: {e}")
 
-    # 3. Scansione collezioni radice generiche
-    try:
-        for col in db.collections():
-            if col.id != "users":
-                for item_doc in col.stream():
-                    path = item_doc.reference.path
-                    if path not in processed_paths:
-                        processed_paths.add(path)
-                        items_to_check.append((item_doc.reference, item_doc.to_dict() or {}))
-    except Exception as e:
-        print(f"Avviso scansione collezioni generiche: {e}")
-
     print(f"Elementi totali trovati nel database: {len(items_to_check)}")
     
     summary_rows = []
-    driver_init_log = "Inizializzazione non avviata"
 
     if not items_to_check:
         print("Nessun prodotto da monitorare nel database.")
     else:
-        # Inizializzazione browser Undetected Chrome (SeleniumBase)
-        driver = None
+        # Esecuzione con SeleniumBase CDP Mode
         try:
-            from seleniumbase import Driver
-            print("Inizializzazione browser Undetected Chrome (SeleniumBase)...")
-            driver = Driver(uc=True, headless=False, no_sandbox=True)
-            print("Undetected Chrome avviato correttamente!")
-            driver_init_log = "Avviato con successo"
+            from seleniumbase import SB
+            print("Avvio sessione SeleniumBase CDP Mode (Bypass Turnstile)...")
+            with SB(uc=True, test=True, guest=True) as sb:
+                for idx, (ref, data) in enumerate(items_to_check, 1):
+                    print(f"\n[{idx}/{len(items_to_check)}]")
+                    res = check_item(ref, data, sb)
+                    summary_rows.append(res)
+                    time.sleep(2)
         except Exception as e:
-            driver_init_log = f"Errore inizializzazione: {e}\n{traceback.format_exc()}"
-            print(f"Nota: Undetected Chrome non inizializzato: {e}")
-
-        try:
+            print(f"Errore sessione SeleniumBase: {e}")
+            # Fallback senza browser
             for idx, (ref, data) in enumerate(items_to_check, 1):
-                print(f"\n[{idx}/{len(items_to_check)}]")
-                res = check_item(ref, data, driver)
+                res = check_item(ref, data, None)
                 summary_rows.append(res)
-                time.sleep(3)
-        finally:
-            if driver:
-                try:
-                    driver.quit()
-                except Exception:
-                    pass
 
     # Scrittura report riassuntivo in GITHUB_STEP_SUMMARY
     summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_file:
         try:
             lines = [
-                "## ⚡ Report Esecuzione Cardmarket Tracker",
+                "## ⚡ Report Esecuzione Cardmarket Tracker (Ogni 5 Min)",
                 f"**Data e Ora:** `{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}`",
                 f"**Prodotti Monitorati:** `{len(items_to_check)}`",
-                f"**Stato Driver Chrome:** `{driver_init_log[:80]}`",
                 "",
                 "| Prodotto | Minimo Attuale | Media Top 10 | Esito |",
                 "|---|---|---|---|"
