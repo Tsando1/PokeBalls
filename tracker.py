@@ -161,18 +161,36 @@ def fetch_html_stealth(target_url, driver=None):
     except Exception as e:
         print(f"  [Engine 1] curl_cffi eccezione: {e}")
 
-    # Motore 2: SeleniumBase UC Mode (Undetected Chrome)
+    # Motore 2: SeleniumBase UC Mode (Undetected Chrome con bypass Turnstile)
     if driver:
         try:
-            print("  [Engine 2] Caricamento con SeleniumBase UC Mode...")
-            driver.get(target_url)
-            driver.sleep(6)  # Attesa per eventuale challenge JS di Cloudflare
+            print("  [Engine 2] Caricamento con SeleniumBase uc_open_with_reconnect...")
+            driver.uc_open_with_reconnect(target_url, reconnect_time=5)
+            
+            # Clicca eventuale Turnstile checkbox automaticamente
+            try:
+                driver.uc_gui_click_captcha()
+            except Exception:
+                pass
+
+            driver.sleep(3)
             html = driver.get_page_source()
+
+            # Se ancora bloccato su "Just a moment", riprova un click sul captcha
+            if "Just a moment" in html or "Attention Required" in html:
+                print("  [Engine 2] Challenge Cloudflare ancora attiva, secondo tentativo click...")
+                try:
+                    driver.uc_gui_click_captcha()
+                    driver.sleep(5)
+                    html = driver.get_page_source()
+                except Exception:
+                    pass
+
             if "article-row" in html or "h1" in html:
-                print("  [Engine 2] Pagina scaricata con successo via SeleniumBase.")
+                print("  [Engine 2] Pagina scaricata con successo via SeleniumBase!")
                 return html
             else:
-                print("  [Engine 2] Elementi tabella o h1 non trovati nell'HTML.")
+                print("  [Engine 2] Elementi tabella o h1 non ancora visibili.")
         except Exception as e:
             print(f"  [Engine 2] Errore SeleniumBase: {e}")
 
