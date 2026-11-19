@@ -7,60 +7,89 @@
     <title>Cardmarket Cloud Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
 </head>
 
-<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8 antialiased selection:bg-sky-500 selection:text-white">
 
     <!-- LOGIN / REGISTRAZIONE -->
-    <div id="auth-box"
-        class="max-w-md mx-auto mt-16 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl hidden">
-        <h1 class="text-2xl font-bold mb-2">Cardmarket Tracker</h1>
-        <p class="text-sm text-slate-400 mb-6">Accedi o crea un account gratuito con la tua email.</p>
-        <input id="email" type="email" placeholder="La tua email"
-            class="w-full mb-3 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
+    <div id="auth-box" class="max-w-md mx-auto mt-20 bg-slate-900/90 backdrop-blur border border-slate-800 p-8 rounded-2xl shadow-2xl hidden">
+        <div class="flex items-center gap-3 mb-2">
+            <span class="text-2xl">⚡</span>
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">Cardmarket Tracker</h1>
+        </div>
+        <p class="text-sm text-slate-400 mb-6">Accedi o crea un account per monitorare le tue carte in tempo reale.</p>
+        <input id="email" type="email" placeholder="Email"
+            class="w-full mb-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition" />
         <input id="password" type="password" placeholder="Password (min. 6 caratteri)"
-            class="w-full mb-4 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
+            class="w-full mb-5 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition" />
         <div class="flex gap-3">
             <button id="btn-login"
-                class="flex-1 bg-sky-600 hover:bg-sky-500 font-semibold py-2 rounded-lg text-sm transition">Accedi</button>
+                class="flex-1 bg-sky-600 hover:bg-sky-500 font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-sky-600/20 active:scale-[0.98]">Accedi</button>
             <button id="btn-register"
-                class="flex-1 bg-slate-700 hover:bg-slate-600 font-semibold py-2 rounded-lg text-sm transition">Registrati</button>
+                class="flex-1 bg-slate-800 hover:bg-slate-700 font-semibold py-2.5 rounded-xl text-sm transition text-slate-200 active:scale-[0.98]">Registrati</button>
         </div>
-        <p id="auth-error" class="text-rose-400 text-xs mt-3"></p>
+        <p id="auth-error" class="text-rose-400 text-xs mt-4 text-center font-medium"></p>
     </div>
 
     <!-- DASHBOARD -->
     <div id="app-box" class="max-w-5xl mx-auto hidden">
-        <div class="flex justify-between items-center mb-6">
+        <!-- HEADER -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 pb-6 border-b border-slate-800/80">
             <div>
-                <h1 class="text-2xl font-bold">Cardmarket Tracker</h1>
-                <p id="user-email" class="text-xs text-slate-400"></p>
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">⚡</span>
+                    <h1 class="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-indigo-300 to-sky-200 bg-clip-text text-transparent">Cardmarket Cloud Tracker</h1>
+                </div>
+                <div class="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                    <span id="user-email" class="font-medium text-slate-300"></span>
+                    <span>•</span>
+                    <span class="inline-flex items-center gap-1.5 text-emerald-400 font-medium">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Auto-check ogni 15 min
+                    </span>
+                </div>
             </div>
-            <button id="btn-logout" class="bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-xs transition">Esci</button>
-        </div>
+            <button id="btn-logout" class="bg-slate-900 hover:bg-slate-800 border border-slate-800 px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 transition active:scale-95">Esci</button>
+        </header>
 
-        <form id="add-form"
-            class="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-8 grid grid-cols-1 md:grid-cols-12 gap-3">
-            <input id="base-url" required placeholder="Link Cardmarket (Singola o Prodotto Sealed)"
-                class="md:col-span-5 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
-            <select id="lang-id"
-                class="md:col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
-                <option value="5">Italiano</option>
-                <option value="1">Inglese</option>
-                <option value="7">Giapponese</option>
-                <option value="2">Francese</option>
-                <option value="3">Tedesco</option>
-                <option value="4">Spagnolo</option>
-                <option value="10">Coreano</option>
-            </select>
-            <input id="target-price" type="number" step="0.01" required placeholder="Soglia € (es. 20)"
-                class="md:col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
-            <input id="discord-webhook" placeholder="Discord Webhook URL"
-                class="md:col-span-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500" />
-            <button type="submit"
-                class="md:col-span-1 bg-sky-600 hover:bg-sky-500 font-semibold rounded-lg px-3 py-2 text-sm transition">Salva</button>
+        <!-- ADD FORM -->
+        <form id="add-form" class="bg-slate-900/80 border border-slate-800/90 p-5 rounded-2xl mb-8 shadow-xl">
+            <div class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                <span>➕</span> Aggiungi Nuovo Prodotto da Monitorare
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                <input id="base-url" required placeholder="Link Cardmarket (es. https://www.cardmarket.com/...)"
+                    class="md:col-span-5 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition" />
+                
+                <select id="lang-id"
+                    class="md:col-span-2 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500 transition">
+                    <option value="5">🇮🇹 Italiano</option>
+                    <option value="1">🇬🇧 Inglese</option>
+                    <option value="7">🇯🇵 Giapponese</option>
+                    <option value="2">🇫🇷 Francese</option>
+                    <option value="3">🇩🇪 Tedesco</option>
+                    <option value="4">🇪🇸 Spagnolo</option>
+                    <option value="10">🇰🇷 Coreano</option>
+                </select>
+
+                <input id="target-price" type="number" step="0.01" required placeholder="Soglia Alert €"
+                    class="md:col-span-2 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition" />
+
+                <input id="discord-webhook" placeholder="Discord Webhook (opzionale)"
+                    class="md:col-span-2 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition" />
+
+                <button type="submit"
+                    class="md:col-span-1 bg-sky-600 hover:bg-sky-500 font-bold rounded-xl px-4 py-2.5 text-sm transition shadow-lg shadow-sky-600/20 active:scale-95 text-white flex items-center justify-center">Salva</button>
+            </div>
         </form>
 
+        <!-- ITEMS LIST -->
         <div id="items-list" class="space-y-6"></div>
     </div>
 
@@ -110,7 +139,7 @@
             }
             document.getElementById("auth-box").classList.add("hidden");
             document.getElementById("app-box").classList.remove("hidden");
-            document.getElementById("user-email").innerText = "Loggato come: " + user.email;
+            document.getElementById("user-email").innerText = user.email;
 
             document.getElementById("add-form").onsubmit = async (e) => {
                 e.preventDefault();
@@ -129,9 +158,10 @@
                     targetPrice: targetPriceVal,
                     discordWebhook: webhook,
                     isSealed: !baseUrl.includes("/Singles/"),
-                    name: "Caricamento in corso (in attesa del primo controllo)...",
-                    title: "Caricamento in corso (in attesa del primo controllo)...",
-                    dailyHistory: []
+                    name: "Caricamento in corso (attendi controllo)...",
+                    title: "Caricamento in corso (attendi controllo)...",
+                    dailyHistory: [],
+                    hourlyHistory: []
                 });
                 document.getElementById("base-url").value = "";
             };
@@ -140,61 +170,109 @@
             onSnapshot(q, (snap) => {
                 const container = document.getElementById("items-list");
                 container.innerHTML = "";
+
+                if (snap.empty) {
+                    container.innerHTML = `
+                        <div class="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/80">
+                            <span class="text-4xl block mb-2">📦</span>
+                            <h3 class="text-base font-bold text-slate-300">Nessun prodotto monitorato</h3>
+                            <p class="text-xs text-slate-500 mt-1">Incolla un link di Cardmarket sopra per iniziare a tracciarlo.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
                 snap.forEach((docSnap) => {
                     const item = docSnap.data();
                     const id = docSnap.id;
                     const badge = item.isSealed ? "SEALED" : "NEAR MINT";
-                    const top10Html = (item.top10Offers || []).map((p, idx) => {
+                    const badgeColor = item.isSealed ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+
+                    const offers = item.top10Offers || [];
+                    const top10Html = offers.length > 0 ? offers.map((p, idx) => {
                         const priceVal = typeof p === 'number' ? p : (p && p.price != null ? p.price : Number(p) || 0);
-                        return `<span class="px-2 py-0.5 rounded text-xs ${idx === 0 ? 'bg-emerald-900/70 text-emerald-300 font-bold' : 'bg-slate-800 text-slate-300'}">#${idx + 1}: ${priceVal.toFixed(2)}€</span>`;
-                    }).join(" ");
+                        return `<span class="px-2.5 py-1 rounded-lg text-xs font-semibold ${idx === 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-300'}">#${idx + 1}: ${priceVal.toFixed(2)} €</span>`;
+                    }).join(" ") : `<span class="text-xs text-slate-500 italic">Offerte in fase di estrazione...</span>`;
 
                     const card = document.createElement("div");
-                    card.className = "bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col lg:flex-row gap-6";
+                    card.className = "bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl transition hover:border-slate-700/80";
                     card.innerHTML = `
-            <img src="${item.imageUrl || 'https://placehold.co/120x168/1e293b/64748b?text=Card'}" class="w-28 h-40 object-contain rounded-lg bg-slate-950 mx-auto lg:mx-0" />
-            <div class="flex-1">
-              <div class="flex justify-between items-start gap-2">
-                <div>
-                  <a href="${item.baseUrl || item.url}" target="_blank" class="text-lg font-bold text-sky-400 hover:underline">${item.name || item.title || 'Prodotto Cardmarket'}</a>
-                  <div class="text-xs text-slate-400 mt-1">
-                    Lingua: <b class="text-white">${LANG_NAMES[item.langId] || LANG_NAMES[item.language] || item.langId || item.language || 'N/D'}</b> • 
-                    Specifica: <b class="text-amber-400">${badge}</b> • 
-                    Soglia Alert: <b class="text-rose-400">${Number(item.targetPrice || 0).toFixed(2)} €</b> • 
-                    Ultimo check: ${item.lastUpdated || item.lastChecked || 'In attesa'}
-                  </div>
-                </div>
-                <button data-del="${id}" class="bg-rose-950 hover:bg-rose-800 text-rose-200 text-xs px-3 py-1.5 rounded-lg transition">Elimina</button>
-              </div>
+                        <div class="flex flex-col md:flex-row gap-6">
+                            <!-- IMMAGINE CARTA -->
+                            <div class="w-full md:w-36 flex-shrink-0 flex items-center justify-center bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                                <img src="${item.imageUrl || 'https://placehold.co/140x196/0f172a/64748b?text=Card'}" 
+                                     alt="Card" 
+                                     class="max-h-48 md:max-h-52 w-auto object-contain rounded-lg drop-shadow-md" />
+                            </div>
 
-              <div class="grid grid-cols-3 gap-3 my-4">
-                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                  <div class="text-xs text-slate-400">1ª Offerta Ora</div>
-                  <div class="text-xl font-bold text-emerald-400">${item.currentMinPrice != null ? item.currentMinPrice.toFixed(2) + ' €' : (item.currentLowest != null ? item.currentLowest.toFixed(2) + ' €' : 'N/D')}</div>
-                </div>
-                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                  <div class="text-xs text-slate-400">Minimo Oggi (${item.dailyMinDate || '-'})</div>
-                  <div class="text-xl font-bold text-amber-400">${item.dailyMinPrice != null ? item.dailyMinPrice.toFixed(2) + ' €' : 'N/D'}</div>
-                </div>
-                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                  <div class="text-xs text-slate-400">Media Top 10 Ora</div>
-                  <div class="text-xl font-bold text-indigo-400">${item.currentAvgTop10 != null ? item.currentAvgTop10.toFixed(2) + ' €' : 'N/D'}</div>
-                </div>
-              </div>
+                            <!-- CONTENUTO PRINCIPALE -->
+                            <div class="flex-1 min-w-0">
+                                <!-- HEADER CARD -->
+                                <div class="flex justify-between items-start gap-4 mb-3">
+                                    <div class="min-w-0">
+                                        <a href="${item.baseUrl || item.url}" target="_blank" 
+                                           class="text-lg md:text-xl font-bold text-sky-400 hover:text-sky-300 hover:underline truncate block">
+                                            ${item.name || item.title || 'Prodotto Cardmarket'}
+                                        </a>
+                                        <div class="flex flex-wrap items-center gap-2 mt-2 text-xs text-slate-400">
+                                            <span class="px-2 py-0.5 rounded-md bg-slate-800 text-white font-bold">${LANG_NAMES[item.langId] || LANG_NAMES[item.language] || item.langId || 'N/D'}</span>
+                                            <span class="px-2 py-0.5 rounded-md border font-semibold ${badgeColor}">${badge}</span>
+                                            <span>Soglia: <b class="text-rose-400">${Number(item.targetPrice || 0).toFixed(2)} €</b></span>
+                                            <span>•</span>
+                                            <span class="text-slate-500">Ultimo check: ${item.lastUpdated || item.lastChecked || 'In attesa'}</span>
+                                        </div>
+                                    </div>
+                                    <button data-del="${id}" class="text-xs bg-rose-950/80 hover:bg-rose-900 border border-rose-800/60 text-rose-200 px-3 py-1.5 rounded-xl font-semibold transition active:scale-95">Elimina</button>
+                                </div>
 
-              <div class="flex flex-wrap gap-1.5 mb-4">${top10Html}</div>
+                                <!-- STATISTICHE 3 BOX -->
+                                <div class="grid grid-cols-3 gap-3 my-4">
+                                    <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">1ª Offerta Ora</div>
+                                        <div class="text-xl md:text-2xl font-extrabold text-emerald-400 mt-0.5">
+                                            ${item.currentMinPrice != null ? item.currentMinPrice.toFixed(2) + ' €' : (item.currentLowest != null ? item.currentLowest.toFixed(2) + ' €' : 'N/D')}
+                                        </div>
+                                    </div>
+                                    <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Minimo Oggi (${item.dailyMinDate ? item.dailyMinDate.slice(5) : '-'})</div>
+                                        <div class="text-xl md:text-2xl font-extrabold text-amber-400 mt-0.5">
+                                            ${item.dailyMinPrice != null ? item.dailyMinPrice.toFixed(2) + ' €' : 'N/D'}
+                                        </div>
+                                    </div>
+                                    <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800/80">
+                                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Media Top 10</div>
+                                        <div class="text-xl md:text-2xl font-extrabold text-indigo-400 mt-0.5">
+                                            ${item.currentAvgTop10 != null ? item.currentAvgTop10.toFixed(2) + ' €' : 'N/D'}
+                                        </div>
+                                    </div>
+                                </div>
 
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-semibold text-slate-400">Andamento Prezzo</span>
-                <div class="flex gap-1 text-xs">
-                  <button id="btn-mode-hourly-${id}" class="px-2 py-0.5 rounded bg-sky-700 text-sky-100 font-semibold transition">Orario (Ultime 24h)</button>
-                  <button id="btn-mode-daily-${id}" class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition">Storico Giornaliero</button>
-                </div>
-              </div>
+                                <!-- TOP 10 OFFERS BADGES -->
+                                <div class="mb-4">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Migliori 10 Offerte:</div>
+                                    <div class="flex flex-wrap gap-1.5">${top10Html}</div>
+                                </div>
 
-              <div class="h-44"><canvas id="chart-${id}"></canvas></div>
-            </div>
-          `;
+                                <!-- GRAFICO ANDAMENTO PREZZO -->
+                                <div class="mt-4 pt-4 border-t border-slate-800/60">
+                                    <div class="flex justify-between items-center mb-2.5">
+                                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                            <span>📈</span> Andamento Prezzo
+                                        </span>
+                                        <div class="flex gap-1.5 text-xs">
+                                            <button id="btn-mode-hourly-${id}" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white font-semibold transition active:scale-95">Orario (Ultime 24h)</button>
+                                            <button id="btn-mode-daily-${id}" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition active:scale-95">Giornaliero</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- ZONA GRAFICO O PLACEHOLDER PULITO -->
+                                    <div id="chart-wrapper-${id}" class="h-44 w-full relative">
+                                        <canvas id="chart-${id}"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                     container.appendChild(card);
 
                     card.querySelector("[data-del]").onclick = () => deleteDoc(doc(db, "items", id));
@@ -205,21 +283,35 @@
                         dailyData = Object.entries(dailyData).map(([d, min]) => ({ d, min: Number(min) || 0 }));
                     }
 
+                    const hasData = hourlyData.length > 0 || dailyData.length > 0;
+                    const wrapper = document.getElementById(`chart-wrapper-${id}`);
+
+                    if (!hasData) {
+                        wrapper.innerHTML = `
+                            <div class="h-full w-full flex flex-col items-center justify-center bg-slate-950/40 rounded-xl border border-dashed border-slate-800/80 text-center px-4">
+                                <span class="text-xl mb-1">⏳</span>
+                                <span class="text-xs font-semibold text-slate-400">In attesa del primo rilevamento automatico</span>
+                                <span class="text-[11px] text-slate-500 mt-0.5">Il tracker su GitHub Actions registrerà il prezzo e genererà la curva.</span>
+                            </div>
+                        `;
+                        return;
+                    }
+
                     const renderChart = (mode) => {
                         if (charts[id]) charts[id].destroy();
 
                         const isHourly = mode === "hourly";
-                        const source = isHourly ? hourlyData : dailyData;
-                        const labels = isHourly ? source.map(h => h.t) : source.map(h => h.d);
-                        const points = isHourly ? source.map(h => h.p) : source.map(h => h.min);
+                        const source = isHourly ? (hourlyData.length > 0 ? hourlyData : dailyData) : (dailyData.length > 0 ? dailyData : hourlyData);
+                        const labels = isHourly ? source.map(h => h.t || h.d) : source.map(h => h.d || h.t);
+                        const points = isHourly ? source.map(h => h.p != null ? h.p : h.min) : source.map(h => h.min != null ? h.min : h.p);
                         const labelTitle = isHourly ? "Prezzo Rilevato (€)" : "Minimo Giornaliero (€)";
                         const color = isHourly ? "#38bdf8" : "#fbbf24";
-                        const bgColor = isHourly ? "rgba(56, 189, 248, 0.15)" : "rgba(251, 191, 36, 0.15)";
+                        const bgColor = isHourly ? "rgba(56, 189, 248, 0.12)" : "rgba(251, 191, 36, 0.12)";
 
-                        const ctx = document.getElementById(`chart-${id}`);
-                        if (!ctx) return;
+                        const canvas = document.getElementById(`chart-${id}`);
+                        if (!canvas) return;
 
-                        charts[id] = new Chart(ctx, {
+                        charts[id] = new Chart(canvas, {
                             type: "line",
                             data: {
                                 labels: labels,
@@ -229,15 +321,37 @@
                                     borderColor: color,
                                     backgroundColor: bgColor,
                                     fill: true,
-                                    tension: 0.25
+                                    tension: 0.3,
+                                    pointRadius: points.length > 30 ? 0 : 3,
+                                    pointHoverRadius: 5,
+                                    borderWidth: 2
                                 }]
                             },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        backgroundColor: "#0f172a",
+                                        borderColor: "#334155",
+                                        borderWidth: 1,
+                                        titleFont: { size: 11 },
+                                        bodyFont: { size: 12, weight: "bold" },
+                                        callbacks: {
+                                            label: (ctx) => ` Prezzo: ${Number(ctx.raw).toFixed(2)} €`
+                                        }
+                                    }
+                                },
                                 scales: {
-                                    x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
-                                    y: { ticks: { callback: v => v + ' €', font: { size: 10 } } }
+                                    x: {
+                                        grid: { color: "rgba(255, 255, 255, 0.04)" },
+                                        ticks: { maxTicksLimit: 7, font: { size: 10 }, color: "#64748b" }
+                                    },
+                                    y: {
+                                        grid: { color: "rgba(255, 255, 255, 0.04)" },
+                                        ticks: { callback: v => v + ' €', font: { size: 10 }, color: "#64748b" }
+                                    }
                                 }
                             }
                         });
@@ -246,11 +360,11 @@
                         const bD = document.getElementById(`btn-mode-daily-${id}`);
                         if (bH && bD) {
                             if (isHourly) {
-                                bH.className = "px-2 py-0.5 rounded bg-sky-700 text-sky-100 font-semibold transition";
-                                bD.className = "px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition";
+                                bH.className = "px-2.5 py-1 rounded-lg bg-sky-600 text-white font-semibold transition active:scale-95";
+                                bD.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition active:scale-95";
                             } else {
-                                bD.className = "px-2 py-0.5 rounded bg-amber-700 text-amber-100 font-semibold transition";
-                                bH.className = "px-2 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-white transition";
+                                bD.className = "px-2.5 py-1 rounded-lg bg-amber-600 text-white font-semibold transition active:scale-95";
+                                bH.className = "px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition active:scale-95";
                             }
                         }
                     };
